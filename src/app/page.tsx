@@ -1,4 +1,6 @@
-import ImageUploader from "@/components/image-uploader";
+import MemeTextForm from "@/components/meme-text-form";
+
+
 
 export default function Home() {
   return (
@@ -6,8 +8,7 @@ export default function Home() {
 <div 
 >
 Meme Generator
-<ImageUploader/>
-
+<MemeTextForm/>
 </div>
     </div>
   );
