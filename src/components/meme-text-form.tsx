@@ -15,34 +15,60 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { useEffect, useState } from "react"
+import { RefObject, useEffect, useRef, useState } from "react"
 import ImageUploader from "./image-uploader"
-import Image from "next/image"
+
+
 
 
 
 const formSchema = z.object({
-  topText: z.string(),
-  bottomText: z.string(),
-  templatePath:z.string()
+  text: z.string(),
+  textPositionX:z.coerce.number(),
+  textPositionY:z.coerce.number(),
+  templatePath:z.string(),
+  textColor:z.string()
 
 })
 
+const handleImage = ({templatePath, text, canvasRef, textColor}:{templatePath:string, text:string, canvasRef:RefObject<HTMLCanvasElement>, textColor:string}) => {
 
 
+  const image = document.createElement('img')
+  const canvas = canvasRef.current;
+
+if (!canvas) return
+
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx) return
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  image.onload = () => {
+   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+ 
+   // Draw the text
+   ctx.fillStyle = textColor;
+   ctx.font = '30px Arial';
+   ctx.textAlign = 'center';
+   ctx.fillText(text, 50, 50);
+ };
+ image.src = templatePath;
+ 
+ }
 
 
 const MemeTextForm = () => {
-    const [templatePath, setTemplatePath] = useState<string>('')
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const [templatePath, setTemplatePath] = useState<string>('')
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
-        
       })
 
-      const onSubmit = async( data : {topText:string, bottomText:string, templatePath:string}) => {
-       
-
+      const onSubmit = async( data : {text:string,textColor:string, templatePath:string, textPositionX:number, textPositionY:number}) => {
+handleImage({...data, canvasRef})
     }
 
       useEffect(()=>{
@@ -58,36 +84,73 @@ const MemeTextForm = () => {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <FormField
           control={form.control}
-          name="topText"
+          name="text"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Top Text</FormLabel>
+              <FormLabel>Text</FormLabel>
               <FormControl>
-                <Input placeholder="Top Text" {...field} />
+                <Input placeholder="Text" {...field} />
               </FormControl>
              
               <FormMessage />
             </FormItem>
           )}
         />
-        <FormField
+
+<FormField
           control={form.control}
-          name="bottomText"
+          name="textColor"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Bottom Text</FormLabel>
+              <FormLabel>Text Color</FormLabel>
               <FormControl>
-                <Input placeholder="Top Text" {...field} />
+                <Input placeholder="Text Color" type="color" {...field} />
               </FormControl>
-         
+             
               <FormMessage />
             </FormItem>
           )}
         />
+
+<FormField
+          control={form.control}
+          name="textPositionX"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Text Position X</FormLabel>
+              <FormControl>
+                <Input placeholder="Text Position X" {...field} type="number" />
+              </FormControl>
+             
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+<FormField
+          control={form.control}
+          name="textPositionY"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Text Position Y</FormLabel>
+              <FormControl>
+                <Input placeholder="Text Position Y" {...field} type="number"/>
+              </FormControl>
+             
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+       
         <Button type="submit">Submit</Button>
       </form>
     </Form>
-
+ { templatePath &&  <canvas
+        ref={canvasRef}
+        width={500}
+        height={500}
+        style={{ border: '1px solid black' }}
+      />}
   </>
   
   )
