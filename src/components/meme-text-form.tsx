@@ -17,13 +17,23 @@ import {
 import { Input } from "@/components/ui/input";
 import { RefObject, useEffect, useRef, useState } from "react";
 import ImageUploader from "./image-uploader";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const formSchema = z.object({
   text: z.string(),
-  textPositionX: z.coerce.number(),
-  textPositionY: z.coerce.number(),
+  textPositionX: z.string(),
+  textPositionY: z.string(),
   templatePath: z.string(),
   textColor: z.string(),
+  fontSize: z.coerce.number(),
 });
 
 const handleImage = ({
@@ -32,17 +42,22 @@ const handleImage = ({
   canvasRef,
   textColor,
   textPositionX,
+  fontSize,
   textPositionY,
 }: {
   templatePath: string;
   text: string;
   canvasRef: RefObject<HTMLCanvasElement>;
   textColor: string;
-  textPositionX: number;
-  textPositionY: number;
+  textPositionX: string;
+  textPositionY: string;
+  fontSize: number;
 }) => {
   const image = document.createElement("img");
   const canvas = canvasRef.current;
+  let horizontalTextPosition = "";
+  let verticalTextPosition = "";
+  const canvasPadding = 20; // Adjust the padding value as needed
 
   if (!canvas) return;
 
@@ -50,15 +65,120 @@ const handleImage = ({
 
   if (!ctx) return;
 
+  const textMetrics = ctx.measureText(text);
+
+  const getPositions = ({
+    textPositionX,
+    textPositionY,
+    textMetrics,
+  }: {
+    textPositionX: string;
+    textPositionY: string;
+    textMetrics: TextMetrics;
+  }) => {
+    switch (textPositionX) {
+      case "left":
+        horizontalTextPosition = String(0 + canvasPadding);
+        break;
+      case "right":
+        horizontalTextPosition = String(
+          canvas.offsetWidth - textMetrics.width - canvasPadding
+        );
+        break;
+      case "center":
+        horizontalTextPosition = String(
+          canvas.offsetWidth / 2 - textMetrics.width / 2
+        );
+        break;
+    }
+
+    switch (textPositionY) {
+      case "top":
+        verticalTextPosition = String(
+          textMetrics.actualBoundingBoxAscent + canvasPadding
+        );
+        break;
+      case "bottom":
+        verticalTextPosition = String(canvas.offsetHeight - canvasPadding);
+        break;
+      case "center":
+        verticalTextPosition = String(canvas.offsetHeight / 2);
+        break;
+    }
+
+    return { horizontalTextPosition, verticalTextPosition };
+  };
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   image.onload = () => {
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
+    let textWidth = ctx.measureText(text).width;
+
     // Draw the text
     ctx.fillStyle = textColor;
-    ctx.font = "30px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(text, textPositionX, textPositionY);
+    ctx.font = `${fontSize}px Arial`;
+
+    const minWidth = 14; // Minimum font size
+    const maxWidth = canvas.width - 2 * canvasPadding;
+
+    let words = text.split(" ");
+    let line = "";
+    let lines = [];
+
+    for (let i = 0; i < words.length; i++) {
+      let testLine = line + words[i] + " ";
+      let metrics = ctx.measureText(testLine);
+      let testWidth = metrics.width;
+      if (testWidth > maxWidth) {
+        lines.push(line);
+        line = words[i] + " ";
+      } else {
+        line = testLine;
+      }
+    }
+    lines.push(line);
+
+    console.log({
+      horizontalTextPosition: getPositions({
+        textPositionX,
+        textPositionY,
+        textMetrics: textMetrics,
+      }).horizontalTextPosition,
+      verticalTextPosition: getPositions({
+        textPositionX,
+        textPositionY,
+        textMetrics: textMetrics,
+      }).verticalTextPosition,
+    });
+
+    // Draw each line of text
+    lines.forEach((line, index) => {
+      while (textWidth > maxWidth && fontSize > minWidth) {
+        fontSize--;
+        ctx.font = `${fontSize}px Arial`;
+        textWidth = ctx.measureText(text).width;
+      }
+
+      ctx.fillText(
+        line,
+        parseInt(
+          getPositions({
+            textPositionX,
+            textPositionY,
+            textMetrics: textMetrics,
+          }).horizontalTextPosition
+        ),
+        parseInt(
+          getPositions({
+            textPositionX,
+            textPositionY,
+            textMetrics: textMetrics,
+          }).verticalTextPosition
+        ) +
+          index * fontSize
+      ); // Assuming 30px line height
+    });
   };
   image.src = templatePath;
 };
@@ -67,6 +187,10 @@ const MemeTextForm = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const [templatePath, setTemplatePath] = useState<string>("");
+
+  const [isImageSubmitted, setIsImageSubmitted] = useState<boolean | undefined>(
+    false
+  );
 
   const handleDownload = () => {
     const canvas = (canvasRef as RefObject<HTMLCanvasElement>).current;
@@ -88,15 +212,21 @@ const MemeTextForm = () => {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
+    defaultValues: {
+      fontSize: 30,
+    },
   });
 
   const onSubmit = async (data: {
     text: string;
     textColor: string;
     templatePath: string;
-    textPositionX: number;
-    textPositionY: number;
+    textPositionX: string;
+    textPositionY: string;
+    fontSize: number;
   }) => {
+    setIsImageSubmitted(true);
+
     handleImage({ ...data, canvasRef });
   };
 
@@ -108,8 +238,12 @@ const MemeTextForm = () => {
   return (
     <>
       <ImageUploader
+        handleDownload={handleDownload}
         setTemplatePath={setTemplatePath}
+        canvasRef={canvasRef}
         templatePath={templatePath}
+        setIsImageSubmitted={setIsImageSubmitted}
+        isImageSubmitted={isImageSubmitted}
       />
 
       <Form {...form}>
@@ -149,16 +283,47 @@ const MemeTextForm = () => {
 
           <FormField
             control={form.control}
+            name="fontSize"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Font Size</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Font Size"
+                    defaultValue={30}
+                    type="number"
+                    {...field}
+                  />
+                </FormControl>
+
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="textPositionX"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Text Position X</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="Text Position X"
-                    {...field}
-                    type="number"
-                  />
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select a position" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectLabel>Text Position X</SelectLabel>
+                        <SelectItem value={"left"}>Left</SelectItem>
+                        <SelectItem value={"center"}>Center</SelectItem>
+                        <SelectItem value={"right"}>Right</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                 </FormControl>
 
                 <FormMessage />
@@ -173,11 +338,22 @@ const MemeTextForm = () => {
               <FormItem>
                 <FormLabel>Text Position Y</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="Text Position Y"
-                    {...field}
-                    type="number"
-                  />
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select a position" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectLabel>Text Position Y</SelectLabel>
+                        <SelectItem value={"top"}>Top</SelectItem>
+                        <SelectItem value={"center"}>Center</SelectItem>
+                        <SelectItem value={"bottom"}>Bottom</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                 </FormControl>
 
                 <FormMessage />
@@ -188,18 +364,6 @@ const MemeTextForm = () => {
           <Button type="submit">Submit</Button>
         </form>
       </Form>
-      {templatePath && (
-        <>
-          {" "}
-          <canvas
-            ref={canvasRef}
-            width={500}
-            height={500}
-            style={{ border: "1px solid black" }}
-          />{" "}
-          <Button onClick={handleDownload}>Download Image</Button>
-        </>
-      )}
     </>
   );
 };
