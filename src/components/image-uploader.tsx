@@ -8,7 +8,7 @@ import { Button } from "./ui/button";
 export default function ImageUploader({
   setTemplatePath,
   templatePath,
-  handleDownload,
+  handleImageDownload,
   canvasRef,
   setIsImageSubmitted,
   isImageSubmitted,
@@ -16,7 +16,7 @@ export default function ImageUploader({
   canvasRef: RefObject<HTMLCanvasElement>;
   setTemplatePath: Dispatch<SetStateAction<string>>;
   templatePath: string;
-  handleDownload: () => void;
+  handleImageDownload: (canvasRef: RefObject<HTMLCanvasElement>) => void;
   setIsImageSubmitted: Dispatch<SetStateAction<boolean | undefined>>;
   isImageSubmitted: boolean | undefined;
 }) {
@@ -29,6 +29,11 @@ export default function ImageUploader({
           width={400}
           height={500}
         />
+        <div className="mt-4 flex gap-3">
+          <Button variant={"destructive"} onClick={() => setTemplatePath("")}>
+            Cancel
+          </Button>
+        </div>
       </div>
     );
 
@@ -40,7 +45,9 @@ export default function ImageUploader({
           <Button variant={"destructive"} onClick={() => setTemplatePath("")}>
             Cancel
           </Button>
-          <Button onClick={handleDownload}>Download Image</Button>
+          <Button onClick={() => handleImageDownload(canvasRef)}>
+            Download Image
+          </Button>
         </div>
       </div>
     );

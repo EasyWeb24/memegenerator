@@ -26,6 +26,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  handleImageDownload,
+  handleTextOnImageFormatting,
+} from "@/utils/handleImageFormatting";
 
 const formSchema = z.object({
   text: z.string(),
@@ -36,184 +40,18 @@ const formSchema = z.object({
   fontSize: z.coerce.number(),
 });
 
-const handleImage = ({
-  templatePath,
-  text,
-  canvasRef,
-  textColor,
-  textPositionX,
-  fontSize,
-  textPositionY,
-}: {
-  templatePath: string;
-  text: string;
-  canvasRef: RefObject<HTMLCanvasElement>;
-  textColor: string;
-  textPositionX: string;
-  textPositionY: string;
-  fontSize: number;
-}) => {
-  const image = document.createElement("img");
-  const canvas = canvasRef.current;
-  let horizontalTextPosition = "";
-  let verticalTextPosition = "";
-  const canvasPadding = 20; // Adjust the padding value as needed
-
-  if (!canvas) return;
-
-  const ctx = canvas.getContext("2d");
-
-  if (!ctx) return;
-
-  const textMetrics = ctx.measureText(text);
-
-  const getPositions = ({
-    textPositionX,
-    textPositionY,
-    textMetrics,
-  }: {
-    textPositionX: string;
-    textPositionY: string;
-    textMetrics: TextMetrics;
-  }) => {
-    switch (textPositionX) {
-      case "left":
-        horizontalTextPosition = String(0 + canvasPadding);
-        break;
-      case "right":
-        horizontalTextPosition = String(
-          canvas.offsetWidth - textMetrics.width - canvasPadding
-        );
-        break;
-      case "center":
-        horizontalTextPosition = String(
-          canvas.offsetWidth / 2 - textMetrics.width / 2
-        );
-        break;
-    }
-
-    switch (textPositionY) {
-      case "top":
-        verticalTextPosition = String(
-          textMetrics.actualBoundingBoxAscent + canvasPadding
-        );
-        break;
-      case "bottom":
-        verticalTextPosition = String(canvas.offsetHeight - canvasPadding);
-        break;
-      case "center":
-        verticalTextPosition = String(canvas.offsetHeight / 2);
-        break;
-    }
-
-    return { horizontalTextPosition, verticalTextPosition };
-  };
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  image.onload = () => {
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-    let textWidth = ctx.measureText(text).width;
-
-    // Draw the text
-    ctx.fillStyle = textColor;
-    ctx.font = `${fontSize}px Arial`;
-
-    const minWidth = 14; // Minimum font size
-    const maxWidth = canvas.width - 2 * canvasPadding;
-
-    let words = text.split(" ");
-    let line = "";
-    let lines = [];
-
-    for (let i = 0; i < words.length; i++) {
-      let testLine = line + words[i] + " ";
-      let metrics = ctx.measureText(testLine);
-      let testWidth = metrics.width;
-      if (testWidth > maxWidth) {
-        lines.push(line);
-        line = words[i] + " ";
-      } else {
-        line = testLine;
-      }
-    }
-    lines.push(line);
-
-    console.log({
-      horizontalTextPosition: getPositions({
-        textPositionX,
-        textPositionY,
-        textMetrics: textMetrics,
-      }).horizontalTextPosition,
-      verticalTextPosition: getPositions({
-        textPositionX,
-        textPositionY,
-        textMetrics: textMetrics,
-      }).verticalTextPosition,
-    });
-
-    // Draw each line of text
-    lines.forEach((line, index) => {
-      while (textWidth > maxWidth && fontSize > minWidth) {
-        fontSize--;
-        ctx.font = `${fontSize}px Arial`;
-        textWidth = ctx.measureText(text).width;
-      }
-
-      ctx.fillText(
-        line,
-        parseInt(
-          getPositions({
-            textPositionX,
-            textPositionY,
-            textMetrics: textMetrics,
-          }).horizontalTextPosition
-        ),
-        parseInt(
-          getPositions({
-            textPositionX,
-            textPositionY,
-            textMetrics: textMetrics,
-          }).verticalTextPosition
-        ) +
-          index * fontSize
-      ); // Assuming 30px line height
-    });
-  };
-  image.src = templatePath;
-};
-
 const MemeTextForm = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   const [templatePath, setTemplatePath] = useState<string>("");
-
   const [isImageSubmitted, setIsImageSubmitted] = useState<boolean | undefined>(
     false
   );
-
-  const handleDownload = () => {
-    const canvas = (canvasRef as RefObject<HTMLCanvasElement>).current;
-
-    if (!canvas) return;
-
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "meme.png"; // Set the filename for the downloaded image
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(url);
-    }, "image/png");
-  };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       fontSize: 30,
+      textColor: "#000",
     },
   });
 
@@ -227,7 +65,11 @@ const MemeTextForm = () => {
   }) => {
     setIsImageSubmitted(true);
 
-    handleImage({ ...data, canvasRef });
+    try {
+      handleTextOnImageFormatting({ ...data, canvasRef });
+    } catch (error) {
+      console.warn((error as Error).message);
+    }
   };
 
   useEffect(() => {
@@ -238,7 +80,7 @@ const MemeTextForm = () => {
   return (
     <>
       <ImageUploader
-        handleDownload={handleDownload}
+        handleImageDownload={handleImageDownload}
         setTemplatePath={setTemplatePath}
         canvasRef={canvasRef}
         templatePath={templatePath}
@@ -273,7 +115,12 @@ const MemeTextForm = () => {
               <FormItem>
                 <FormLabel>Text Color</FormLabel>
                 <FormControl>
-                  <Input placeholder="Text Color" type="color" {...field} />
+                  <Input
+                    defaultValue={"#000"}
+                    placeholder="Text Color"
+                    type="color"
+                    {...field}
+                  />
                 </FormControl>
 
                 <FormMessage />
